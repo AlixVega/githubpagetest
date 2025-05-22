@@ -1,0 +1,187 @@
+
+let productos = JSON.parse(localStorage.getItem("productos")) || [];
+let categorias = JSON.parse(localStorage.getItem("categorias")) || [];
+let modoEdicion = false;
+let productoEditando = null;
+
+function guardarEnLocalStorage() {
+    localStorage.setItem("productos", JSON.stringify(productos));
+}
+
+function guardarCategorias() {
+    localStorage.setItem("categorias", JSON.stringify(categorias));
+}
+
+function limpiarFormulario() {
+    document.getElementById("nombre").value = "";
+    document.getElementById("cantidad").value = "";
+    document.getElementById("minimo").value = "";
+    document.getElementById("precio").value = "";
+    document.getElementById("categoria").value = "";
+    modoEdicion = false;
+    productoEditando = null;
+}
+
+function agregarProducto() {
+    const nombre = document.getElementById("nombre").value.trim();
+    const cantidad = parseInt(document.getElementById("cantidad").value);
+    const minimo = parseInt(document.getElementById("minimo").value);
+    const precio = parseFloat(document.getElementById("precio").value);
+    const categoria = document.getElementById("categoria").value.trim();
+
+    if (!nombre || isNaN(cantidad) || isNaN(precio) || isNaN(minimo)) {
+        alert("Por favor, complete todos los campos correctamente.");
+        return;
+    }
+
+    if (cantidad < 0 || precio < 0 || minimo < 0) {
+        alert("La cantidad, el mínimo y el precio no pueden ser negativos.");
+        return;
+    }
+
+    const nuevoProducto = { nombre, cantidad, minimo, precio, categoria };
+
+    if (modoEdicion && productoEditando !== null) {
+        productos[productoEditando] = nuevoProducto;
+    } else {
+        productos.push(nuevoProducto);
+    }
+
+    guardarEnLocalStorage();
+    renderizarTabla();
+    limpiarFormulario();
+}
+
+function eliminarProducto(index) {
+    if (confirm("¿Está seguro de eliminar este producto?")) {
+        productos.splice(index, 1);
+        guardarEnLocalStorage();
+        renderizarTabla();
+    }
+}
+
+function editarProducto(index) {
+    const producto = productos[index];
+    document.getElementById("nombre").value = producto.nombre;
+    document.getElementById("cantidad").value = producto.cantidad;
+    document.getElementById("minimo").value = producto.minimo || 0;
+    document.getElementById("precio").value = producto.precio;
+    document.getElementById("categoria").value = producto.categoria;
+    modoEdicion = true;
+    productoEditando = index;
+}
+
+function renderizarTabla(filtroNombre = "", filtroCategoria = "") {
+    const tbody = document.getElementById("tabla-productos");
+    tbody.innerHTML = "";
+
+    const productosFiltrados = productos.filter(p =>
+        p.nombre.toLowerCase().includes(filtroNombre.toLowerCase()) &&
+        (filtroCategoria === "" || p.categoria === filtroCategoria)
+    );
+
+    let total = 0;
+
+    productosFiltrados.forEach((producto, index) => {
+        const fila = document.createElement("tr");
+        const cantidadTexto = producto.cantidad < producto.minimo
+            ? `<span style="color:red;">${producto.cantidad} (bajo mínimo)</span>`
+            : producto.cantidad;
+
+        total += producto.precio * producto.cantidad;
+
+        fila.innerHTML = `
+            <td>${producto.nombre}</td>
+            <td>${cantidadTexto}</td>
+            <td>$${producto.precio.toFixed(2)}</td>
+            <td>${producto.categoria || "-"}</td>
+            <td>
+                <button onclick="editarProducto(${index})">Editar</button>
+                <button onclick="eliminarProducto(${index})">Eliminar</button>
+            </td>
+        `;
+
+        tbody.appendChild(fila);
+    });
+
+    document.getElementById("total-inventario").innerText = `Total: $${total.toFixed(2)}`;
+}
+
+function filtrarProductos() {
+    const busqueda = document.getElementById("buscar").value;
+    const categoriaFiltro = document.getElementById("filtro-categoria").value;
+    renderizarTabla(busqueda, categoriaFiltro);
+}
+
+function exportarCSV() {
+    let csv = "Nombre,Cantidad,Mínimo,Precio,Categoría\n";
+    productos.forEach(p => {
+        csv += `${p.nombre},${p.cantidad},${p.minimo},${p.precio},${p.categoria || ""}\n`;
+    });
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "inventario.csv";
+    link.click();
+}
+
+function exportarPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let y = 10;
+
+    doc.text("Inventario de Productos", 10, y);
+    y += 10;
+
+    productos.forEach(p => {
+        doc.text(`• ${p.nombre} | Cant: ${p.cantidad} | Mín: ${p.minimo} | $${p.precio} | ${p.categoria || "-"}`, 10, y);
+        y += 10;
+        if (y > 280) {
+            doc.addPage();
+            y = 10;
+        }
+    });
+
+    doc.save("inventario.pdf");
+}
+
+function agregarCategoria() {
+    const nueva = document.getElementById("nueva-categoria").value.trim();
+    if (!nueva || categorias.includes(nueva)) {
+        alert("Categoría inválida o ya existente.");
+        return;
+    }
+    categorias.push(nueva);
+    guardarCategorias();
+    actualizarSelectCategorias();
+    document.getElementById("nueva-categoria").value = "";
+}
+
+function actualizarSelectCategorias() {
+    const select = document.getElementById("categoria");
+    const filtro = document.getElementById("filtro-categoria");
+
+    // Limpiar y agregar opciones
+    select.innerHTML = '<option value="">Selecciona una</option>';
+    filtro.innerHTML = '<option value="">Todas</option>';
+
+    categorias.forEach(cat => {
+        const option1 = document.createElement("option");
+        option1.value = cat;
+        option1.textContent = cat;
+        select.appendChild(option1);
+
+        const option2 = document.createElement("option");
+        option2.value = cat;
+        option2.textContent = cat;
+        filtro.appendChild(option2);
+    });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    renderizarTabla();
+    actualizarSelectCategorias();
+});
